@@ -54,12 +54,39 @@ const prompt = ChatPromptTemplate.fromMessages([
 //=======================================Chaining====================================================
 const chain= prompt.pipe(model).pipe(new StringOutputParser())
 
+//=======================================Conversation Memory====================================================
+//it is a emory that a bot remmebrs during a conversation 
+const store = {};
+function getSessionHistory(sessionId) {
+    //if there is no session id exists in our store database, we create one and store the session history in it
+    if (!store['sessiongId']){
+            store[sessionId] =new InMemoryChatMessageHistory();
+    }
+     return store[sessionId];
+}
+
+// now we wrap it inside runnable
+const chatbot = new RunnableWithMessageHistory({
+    runnable:chain,
+    getMessageHistory: getSessionHistory,
+    inputMessagesKey: "message",
+    historyMessagesKey= "history"
+})
+
+
+
+
+
 //=======================================Invoking====================================================
-async function getReply(message) {
+async function getReply(message,sessionId) {
     try {
-        return await chain.invoke({
+        return await chatbot.invoke({
             message,
+        },
+        {
+            configurable: { sessionId,},
         });
+
     }
 
     catch (error) {
@@ -152,7 +179,7 @@ async function connectBot(){
             console.log(`Message: ${text}`);
 
             //bot send message
-            const reply= await getReply(text)
+            const reply= await getReply(text,number) //we give phone number of sender as session ID (through this on that number we have whole conversation history)
             await socket.sendMessage(jid, {
                 text: reply,
             });
