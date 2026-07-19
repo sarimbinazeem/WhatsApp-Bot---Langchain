@@ -14,6 +14,61 @@ import makeWASocket , {useMultiFileAuthState, fetchLatestWaWebVersion,Disconnect
 
 import Boom from "@hapi/boom";
 
+import { ChatGroq } from "@langchain/groq";
+import {
+    ChatPromptTemplate, //for prompt templates
+    MessagesPlaceholder, //for gaps to be filled in later on
+} from "@langchain/core/prompts";
+
+import { StringOutputParser } from "@langchain/core/output_parsers";
+
+import {
+    InMemoryChatMessageHistory, // gives a session history
+} from "@langchain/core/chat_history";
+
+import {
+    RunnableWithMessageHistory, //creates a wrraper for runnables to store memory
+} from "@langchain/core/runnables";
+
+//=======================================LLM====================================================
+
+const model = new ChatGroq({
+    apiKey: process.env.GROQ_API_KEY,
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.7,
+});
+
+//=======================================Prompt====================================================
+const prompt = ChatPromptTemplate.fromMessages([
+    [
+        "system",
+        "You are a friendly AI assistant on WhatsApp. Keep your answers clear, helpful, and conversational.",
+    ],
+    
+    new MessagesPlaceholder("history"),
+    
+    ["human", "{message}"],
+]);
+
+
+//=======================================Chaining====================================================
+const chain= prompt.pipe(model).pipe(new StringOutputParser())
+
+//=======================================Invoking====================================================
+async function getReply(message) {
+    try {
+        return await chain.invoke({
+            message,
+        });
+    }
+
+    catch (error) {
+        console.error(error);
+
+        return "Sorry, something went wrong.";
+    }
+}
+
 //=======================================Baileys====================================================
 //creating asynchronous function that starts connection (making it async because loading authorization, connection, downloading whatsapp version takes time so we don want to wait our program for that)
 async function connectBot(){
@@ -97,8 +152,9 @@ async function connectBot(){
             console.log(`Message: ${text}`);
 
             //bot send message
+            const reply= await getReply(text)
             await socket.sendMessage(jid, {
-                text: `You said: ${text}`
+                text: reply,
             });
         }
 
