@@ -59,7 +59,7 @@ const chain= prompt.pipe(model).pipe(new StringOutputParser())
 const store = {};
 function getSessionHistory(sessionId) {
     //if there is no session id exists in our store database, we create one and store the session history in it
-    if (!store['sessiongId']){
+    if (!store[sessionId]){
             store[sessionId] =new InMemoryChatMessageHistory();
     }
      return store[sessionId];
@@ -70,9 +70,74 @@ const chatbot = new RunnableWithMessageHistory({
     runnable:chain,
     getMessageHistory: getSessionHistory,
     inputMessagesKey: "message",
-    historyMessagesKey= "history"
+    historyMessagesKey: "history"
 })
 
+//=======================================Personal Memory====================================================
+//It is that memory that the bot automaically extracts and save it. It extracts the important information that belongs to user personal information
+const personalMemory = {};
+//under a number's sessionID the number's user's personal information is stored as memory
+
+//Prompt to EXTRACT personal information
+const memoryPrompt = ChatPromptTemplate.fromMessages([
+    [
+        "system",
+        `Extract any personal information from the user's message.
+
+            Return ONLY valid JSON.
+
+            Possible fields include:
+            - name
+            - age
+            - city
+            - profession
+            - hobbies
+            - favorite_food
+            - favorite_color
+            - preferences
+
+            If nothing personal is found return {}.
+
+            Do not explain anything.`,
+    ],
+
+    ["human", "{message}"],
+]);
+const memoryChain = memoryPrompt.pipe(model).pipe(new StringOutputParser());
+
+async function updatePersonalMemory(message,sessionId){
+    try{
+        const result= await memoryChain.invoke({message,})
+        
+        //parse the json 
+        const text= JSON.parse(result)
+
+        //If there is no personaly memory of this sessionID then create one
+        if (!personalMemory[sessionId]) {
+
+            personalMemory[sessionId] = {};  //We dont store inMessageHistory() here because we want to store only the PERSONAL info not the whole chat
+
+        }        
+
+        //this merges the previous history with a new information
+        Object.assign(
+
+            personalMemory[sessionId],
+
+            text
+
+        );
+
+    }
+    catch (error) {
+
+        console.log("Memory extraction failed.");
+
+    }
+}
+
+
+//We give the bot the psosible attribtues that you shoudl find and give the result in JSON format
 
 
 
@@ -177,6 +242,43 @@ async function connectBot(){
 
             console.log(`Message from: ${number}`);
             console.log(`Message: ${text}`);
+
+            await updatePersonalMemory(text,number );
+
+            const lower = text.toLowerCase();
+
+            //if the message is any of those tehn call the personal memory
+            if (
+                lower.includes("who am i") ||
+                lower.includes("what do you know about me") ||
+                lower.includes("what do you remember about me") ||
+                lower.includes("list everything you remember about me")
+            ) {
+                const memory = personalMemory[number];
+
+                //if for that sessionID we dont find any memory then we pirn that
+                if (!memory || Object.keys(memory).length === 0) {
+                    await socket.sendMessage(jid, {
+                        text: "I don't know anything about you yet.",
+                    });
+
+                    continue;
+                }          
+                
+ 
+                let reply = "Here's what I know about you:\n\n";
+
+                for (const key in memory) {
+                    reply += `• ${key}: ${memory[key]}\n`;
+                }   
+                
+                await socket.sendMessage(jid, {
+                    text: reply,
+                });            
+
+                continue
+
+            }
 
             //bot send message
             const reply= await getReply(text,number) //we give phone number of sender as session ID (through this on that number we have whole conversation history)
