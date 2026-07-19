@@ -30,6 +30,12 @@ import {
     RunnableWithMessageHistory, //creates a wrraper for runnables to store memory
 } from "@langchain/core/runnables";
 
+import fs from "fs/promises"; //to read knowledge.txt
+ 
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"; //to create chunks of text
+
+import { MemoryVectorStore } from "langchain/vectorstores/memory";  //to store vector embeddings
+
 //=======================================LLM====================================================
 
 const model = new ChatGroq({
@@ -37,6 +43,62 @@ const model = new ChatGroq({
     model: "llama-3.3-70b-versatile",
     temperature: 0.7,
 });
+
+//=======================================Embedding====================================================
+import { pipeline } from "@xenova/transformers";
+
+let extractor;
+
+async function getEmbeddingModel() {
+
+    if (!extractor) {
+
+        extractor = await pipeline(
+            "feature-extraction",
+            "Xenova/all-MiniLM-L6-v2"
+        );
+
+    }
+
+    return extractor;
+}
+
+//for langchain we need to create embedDocuments and mebd query fucntion explciity in javascript
+const embeddings = {
+
+    async embedDocuments(texts) {
+
+        const model = await getEmbeddingModel();
+
+        const vectors = [];
+
+        for (const text of texts) {
+
+            const output = await model(text, {
+                pooling: "mean",
+                normalize: true,
+            });
+
+            vectors.push(Array.from(output.data));
+
+        }
+
+        return vectors;
+    },
+
+    async embedQuery(text) {
+
+        const model = await getEmbeddingModel();
+
+        const output = await model(text, {
+            pooling: "mean",
+            normalize: true,
+        });
+
+        return Array.from(output.data);
+    },
+
+};
 
 //=======================================Prompt====================================================
 const prompt = ChatPromptTemplate.fromMessages([
@@ -271,7 +333,7 @@ async function connectBot(){
                 for (const key in memory) {
                     reply += `• ${key}: ${memory[key]}\n`;
                 }   
-                
+
                 await socket.sendMessage(jid, {
                     text: reply,
                 });            
