@@ -31,11 +31,12 @@ import {
 } from "@langchain/core/runnables";
 
 import fs from "fs/promises"; //to read knowledge.txt
- 
+
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"; //to create chunks of text
 
 import { MemoryVectorStore } from "langchain/vectorstores/memory";  //to store vector embeddings
 
+import { pipeline } from "@xenova/transformers";
 //=======================================LLM====================================================
 
 const model = new ChatGroq({
@@ -45,7 +46,6 @@ const model = new ChatGroq({
 });
 
 //=======================================Embedding====================================================
-import { pipeline } from "@xenova/transformers";
 
 let extractor;
 
@@ -100,6 +100,46 @@ const embeddings = {
 
 };
 
+//=======================================RAG====================================================
+let retriever;
+let vectorStore;
+
+async function initliazeRAG() {
+    console.log("Loading Knowledge Base...");
+
+    //reading the knwoledge.txt
+    const knowledge = await fs.readFile(
+        "knowledge.txt",
+        "utf-8"
+    )
+
+    //Chunking
+    const splitter = new RecursiveCharacterTextSplitter(
+        {
+            chunkSize: 500,
+            chunkOverlap: 50,
+        }
+    )
+
+    //create documents of that chunks
+    const documents = splitter.createDocuments([
+        knowledge,
+    ])
+
+     console.log(`Created ${documents.length} chunks.`);
+
+     //store in vector database
+
+    vectorStore = await MemoryVectorStore.fromDocuments(documents,embeddings);
+
+    //creating reteiver that gives top 3 most relevant
+
+    retriever = vectorStore.asRetriever({ k: 3, });
+
+    console.log("Knowledge Base Loaded!");
+
+}
+
 //=======================================Prompt====================================================
 const prompt = ChatPromptTemplate.fromMessages([
     [
@@ -112,9 +152,35 @@ const prompt = ChatPromptTemplate.fromMessages([
     ["human", "{message}"],
 ]);
 
+//=======================================RAG Prompt====================================================
+const ragPrompt = ChatPromptTemplate.fromMessages([
+    [
+        "system",
+        `You are a helpful WhatsApp assistant.
+
+        Use the following context to answer the user's question.
+
+            You are a helpful assistant.
+
+            Use the retrieved context whenever it contains information relevant to the user's question.
+
+            If the context is unrelated or does not answer the question, answer using your own knowledge.
+
+            Never contradict the retrieved context.
+
+        Context:
+        {context}`,
+            ],
+
+            new MessagesPlaceholder("history"),
+
+            ["human", "{message}"],
+        ]);
+
 
 //=======================================Chaining====================================================
 const chain= prompt.pipe(model).pipe(new StringOutputParser())
+const ragChain = ragPrompt.pipe(model).pipe(new StringOutputParser());
 
 //=======================================Conversation Memory====================================================
 //it is a emory that a bot remmebrs during a conversation 
@@ -135,6 +201,17 @@ const chatbot = new RunnableWithMessageHistory({
     historyMessagesKey: "history"
 })
 
+const ragBot = new RunnableWithMessageHistory({
+
+    runnable: ragChain,
+
+    getMessageHistory: getSessionHistory,
+
+    inputMessagesKey: "message",
+
+    historyMessagesKey: "history",
+
+});
 //=======================================Personal Memory====================================================
 //It is that memory that the bot automaically extracts and save it. It extracts the important information that belongs to user personal information
 const personalMemory = {};
@@ -223,9 +300,31 @@ async function getReply(message,sessionId) {
     }
 }
 
+async function getRAGReply(message,sessionId){
+    try{
+        const docs = await retriever.invoke(message)
+
+        const context = docs.map((doc, index) =>
+                                `Document ${index + 1}\n${doc.pageContent}`
+                            ).join("\n\n");
+
+        return await ragBot.invoke({message,context, history: await getSessionHistory(sessionId).getMessags()})
+    }
+    catch (error) {
+
+        console.error(error);
+
+        return "Sorry, something went wrong.";
+
+    }
+}
+
+
 //=======================================Baileys====================================================
 //creating asynchronous function that starts connection (making it async because loading authorization, connection, downloading whatsapp version takes time so we don want to wait our program for that)
 async function connectBot(){
+    await initializeRAG();
+    
     //For Authorization:
     const {state, saveCreds} = await useMultiFileAuthState("auth_info_baileys")
     //it saves our login info and creditentials in auth_info_bailey so we dont have to login again and again
@@ -328,7 +427,7 @@ async function connectBot(){
                 }          
                 
  
-                let reply = "Here's what I know about you:\n\n";
+                const reply = await getRAGReply(text, number);
 
                 for (const key in memory) {
                     reply += `• ${key}: ${memory[key]}\n`;
