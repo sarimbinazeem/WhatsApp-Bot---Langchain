@@ -5,7 +5,7 @@ import "dotenv/config"
 import pino from "pino" // to ignore the logs that bailey creates
 import QRCode from "qrcode" //When we first connect to wahtsapp it gives a qrcode which we will dipslya in terminal
 
-import makeWASocket , {useMultiFileAuthState, fetchLatestWaWebVersion,DisconnectReason} from "baileys"
+import makeWASocket , {useMultiFileAuthState, fetchLatestWaWebVersion,DisconnectReason, downloadMediaMessage} from "baileys"
 
 //makeWASocket -> it creates a connection to whatsapp
 //QR Code is sent everytime for AUTHORIZATION. We can fix this by using useMultiFileAuthState() -> it saves the login 
@@ -37,6 +37,8 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"; //to 
 import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";  //to store vector embeddings
 
 import { pipeline } from "@xenova/transformers";
+import { GoogleGenAI } from "@google/genai";
+
 //=======================================LLM====================================================
 
 const model = new ChatGroq({
@@ -44,6 +46,13 @@ const model = new ChatGroq({
     model: "llama-3.3-70b-versatile",
     temperature: 0.7,
 });
+
+//=======================================Gemini====================================================
+const gemini = new GoogleGenAI(
+    {
+        apiKey: process.env.GEMINI_API_KEY,
+    } 
+)
 
 //=======================================Embedding====================================================
 
@@ -306,6 +315,54 @@ async function getRAGReply(message,sessionId){
     }
 }
 
+async function getImageReply(buffer,mimeType,caption){
+    try
+    {
+        const image = buffer.toString("base64");  //So that gemini understands the image
+
+        const response = await gemini.models.generateContent({
+            model: "gemini-2.5-flash-lite",
+            contents=[
+                {
+                    inlineData:{
+                        mimeType: mimeType,
+                        data:image,
+                    },
+                },
+                {
+                   text: `
+                   Caption:
+                    ${caption}
+                    Analyze the uploaded image.
+
+                    If it contains:
+                    - a question -> solve it.
+                    - handwritten notes -> explain them.
+                    - text -> summarize it.
+                    - a math problem -> solve it step by step.
+                    - a graph -> explain it.
+                    - a diagram -> describe it.
+                    - code -> explain it.
+                    - an object -> identify it.
+
+                    Answer naturally.
+                    `
+                }
+
+            ]
+        })
+
+        return response.text
+    }
+     catch (err) {
+
+        console.error(err);
+
+        return "Sorry, I couldn't analyze the image.";
+
+    }    
+}
+
 
 //=======================================Baileys====================================================
 //creating asynchronous function that starts connection (making it async because loading authorization, connection, downloading whatsapp version takes time so we don want to wait our program for that)
@@ -374,6 +431,38 @@ async function connectBot(){
 
             if (msg.key.fromMe || isGroup || isStatus) {
                 continue;
+            }
+            
+            if(msg.message?.imageMessage){
+                const caption = msg.message.imageMessage.caption ?? "";
+
+                const buffer = await downloadMediaMessage(
+                    msg,
+                    "buffer",
+                    {},
+                    {
+                        logger: pino(),
+                        reuploadRequest: socket.updateMediaMessage,
+                    }
+                )
+
+                if (!buffer) {
+                    await socket.sendMessage(jid, {
+                        text: "Couldn't download the image.",
+                    });
+                    continue;
+                }
+
+                const mimeType = msg.message.imageMessage.mimetype
+                const reply = await getImageReply(buffer,mimeType,caption)
+
+                await socket.sendMessage(
+                    jid,{
+                        text:reply
+                    }
+                )
+
+                continue
             }
 
             const text =msg.message?.conversation ||  msg.message?.extendedTextMessage?.text;
