@@ -12,7 +12,6 @@ import makeWASocket , {useMultiFileAuthState, fetchLatestWaWebVersion,Disconnect
 // to avoid version issues we use fetchLatestWaWebVersion()
 //If there is a disconnect for some reason -> DisconnectReason will let us know 
 
-import Boom from "@hapi/boom";
 
 import { ChatGroq } from "@langchain/groq";
 import {
@@ -149,18 +148,6 @@ async function initliazeRAG() {
 
 }
 
-//=======================================Prompt====================================================
-const prompt = ChatPromptTemplate.fromMessages([
-    [
-        "system",
-        "You are a friendly AI assistant on WhatsApp. Keep your answers clear, helpful, and conversational.",
-    ],
-    
-    new MessagesPlaceholder("history"),
-    
-    ["human", "{message}"],
-]);
-
 //=======================================RAG Prompt====================================================
 const ragPrompt = ChatPromptTemplate.fromMessages([
     [
@@ -190,7 +177,6 @@ const ragPrompt = ChatPromptTemplate.fromMessages([
 
 
 //=======================================Chaining====================================================
-const chain= prompt.pipe(model).pipe(new StringOutputParser())
 const ragChain = ragPrompt.pipe(model).pipe(new StringOutputParser());
 
 //=======================================Conversation Memory====================================================
@@ -315,7 +301,7 @@ async function getRAGReply(message,sessionId){
     }
 }
 
-async function getImageReply(buffer,mimeType,caption){
+async function getImageReply(buffer,mimeType,caption=""){
     try
     {
         const image = buffer.toString("base64");  //So that gemini understands the image
@@ -330,22 +316,22 @@ async function getImageReply(buffer,mimeType,caption){
                     },
                 },
                 {
-                   text: `
-                   Caption:
+                    text: `
+                    File MIME Type:
+                    ${mimeType}
+
+                    Caption:
                     ${caption}
-                    Analyze the uploaded image.
 
-                    If it contains:
-                    - a question -> solve it.
-                    - handwritten notes -> explain them.
-                    - text -> summarize it.
-                    - a math problem -> solve it step by step.
-                    - a graph -> explain it.
-                    - a diagram -> describe it.
-                    - code -> explain it.
-                    - an object -> identify it.
+                    Analyze this uploaded file.
 
-                    Answer naturally.
+                    If the uploaded file is:
+                    - image -> analyze it
+                    - document -> summarize it
+                    - video -> explain it
+                    - audio -> transcribe it and answer the user's question
+
+                    ...
                     `
                 }
 
@@ -452,20 +438,108 @@ async function connectBot(){
                     });
                     continue;
                 }
-
+                
                 const mimeType = msg.message.imageMessage.mimetype
                 const reply = await getImageReply(buffer,mimeType,caption)
-
+                
                 await socket.sendMessage(
                     jid,{
                         text:reply
                     }
                 )
-
+                
                 continue
             }
+            
+            if (msg.message?.documentMessage) {
+                const caption = msg.message.documentMessage.caption ?? "";
+                const buffer = await downloadMediaMessage(
+                    msg,
+                    "buffer",
+                    {},
+                    {
+                        logger: pino(),
+                        reuploadRequest: socket.updateMediaMessage,
+                    }
+                );
+                if (!buffer) {
+                    await socket.sendMessage(jid, {
+                        text: "Couldn't download the image.",
+                    });
+                    continue;
+                }
+                
+                const mimeType = msg.message.documentMessage.mimetype;
+                
+                const reply = await getImageReply(buffer, mimeType,caption);
+                
+                await socket.sendMessage(jid, {
+                    text: reply,
+                });
+                
+                continue;
+            }
+            
+            if (msg.message?.videoMessage) {
+                const caption = msg.message.videoMessage.caption ?? "";
+                const buffer = await downloadMediaMessage(
+                    msg,
+                    "buffer",
+                    {},
+                    {
+                        logger: pino(),
+                        reuploadRequest: socket.updateMediaMessage,
+                    }
+                );
+                if (!buffer) {
+                    await socket.sendMessage(jid, {
+                        text: "Couldn't download the image.",
+                    });
+                    continue;
+                }
+                
+                const mimeType = msg.message.videoMessage.mimetype;
+                
+                const reply = await getImageReply(buffer, mimeType,caption);
+                
+                await socket.sendMessage(jid, {
+                    text: reply,
+                });
+                
+                continue;
+            }           
+            
+            if (msg.message?.audioMessage) {
+                
+                const buffer = await downloadMediaMessage(
+                    msg,
+                    "buffer",
+                    {},
+                    {
+                        logger: pino(),
+                        reuploadRequest: socket.updateMediaMessage,
+                    }
+                );
+                
+                if (!buffer) {
+                    await socket.sendMessage(jid, {
+                        text: "Couldn't download the image.",
+                    });
+                    continue;
+                }
+                const mimeType = msg.message.audioMessage.mimetype;
 
-            const text =msg.message?.conversation ||  msg.message?.extendedTextMessage?.text;
+                const reply = await getImageReply(buffer, mimeType);
+
+                await socket.sendMessage(jid, {
+                    text: reply,
+                });
+
+                continue;
+            }           
+
+
+             const text =msg.message?.conversation ||  msg.message?.extendedTextMessage?.text;
 
             // if the text is sticker or gift that text will be none
             if (!text) {
