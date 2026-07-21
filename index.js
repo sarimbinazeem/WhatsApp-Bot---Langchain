@@ -307,8 +307,9 @@ async function getImageReply(buffer,mimeType,caption=""){
         const image = buffer.toString("base64");  //So that gemini understands the image
 
         const response = await gemini.models.generateContent({
-            model: "gemini-2.5-flash-lite",
-            contents=[
+            model: "gemini-flash-lite-latest",
+
+            contents:[
                 {
                     inlineData:{
                         mimeType: mimeType,
