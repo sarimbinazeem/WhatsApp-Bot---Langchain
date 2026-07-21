@@ -34,7 +34,7 @@ import fs from "fs/promises"; //to read knowledge.txt
 
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"; //to create chunks of text
 
-import { MemoryVectorStore } from "langchain/vectorstores/memory";  //to store vector embeddings
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";  //to store vector embeddings
 
 import { pipeline } from "@xenova/transformers";
 //=======================================LLM====================================================
@@ -230,7 +230,7 @@ const memoryPrompt = ChatPromptTemplate.fromMessages([
             - favorite_color
             - preferences
 
-            If nothing personal is found return {}.
+            If nothing personal is found return  {{}}.
 
             Do not explain anything.`,
     ],
@@ -242,7 +242,7 @@ const memoryChain = memoryPrompt.pipe(model).pipe(new StringOutputParser());
 async function updatePersonalMemory(message,sessionId){
     try{
         const result= await memoryChain.invoke({message,})
-        
+        console.log(result);
         //parse the json 
         const text= JSON.parse(result)
 
@@ -264,9 +264,7 @@ async function updatePersonalMemory(message,sessionId){
 
     }
     catch (error) {
-
-        console.log("Memory extraction failed.");
-
+        console.error(error);
     }
 }
 
@@ -340,10 +338,8 @@ async function connectBot(){
         //if there is a QR then place it on terminal
         if(qr)
         {
-            console.log(await QRCode.toString(qr, {
-                type:"terminal",
-                small:true,
-            }))
+            await QRCode.toFile("qr.png", qr);
+            console.log("QR saved as qr.png");
         }
     
         //if connected then print  that w eare conneted
