@@ -152,28 +152,28 @@ async function initliazeRAG() {
 const ragPrompt = ChatPromptTemplate.fromMessages([
     [
         "system",
-        `You are a helpful WhatsApp assistant.
+        `You are a friendly AI assistant on WhatsApp.
 
-        You have access to a knowledge base.
+        You have access to a retrieved knowledge base.
 
-        If the retrieved context answers the user's question,
-        answer using ONLY the retrieved context.
+        Rules:
+        - First, check whether the retrieved context contains information relevant to the user's question.
+        - If it does, answer using that information.
+        - If the context does not answer the question, answer using your own general knowledge.
+        - Never make up or contradict information found in the retrieved context.
+        - If the user asks about the owner of this bot (Sarim), his projects, skills, education, experience, or anything related to him, always prioritize the retrieved context.
+        - Use previous conversation history when it helps answer the user.
+        - Keep responses natural, conversational, and concise.
+        - If the answer is unknown and neither the context nor your knowledge contains it, simply say you don't know.
 
-        If the retrieved context does not contain the answer,
-        answer using your own knowledge.
-
-        Never invent facts that contradict the retrieved context.
-
-        Keep answers short and conversational.
-
-        Context:
-        {context}`,
+        Retrieved Context:
+        {context}`
             ],
 
-            new MessagesPlaceholder("history"),
+    new MessagesPlaceholder("history"),
 
-            ["human", "{message}"],
-        ]);
+    ["human", "{message}"],
+]);
 
 
 //=======================================Chaining====================================================

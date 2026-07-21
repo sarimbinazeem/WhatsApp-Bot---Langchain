@@ -1,25 +1,42 @@
-ABC Technologies
+Name: Sarim
 
-ABC Technologies is a software company located in Karachi, Pakistan.
+Profession:
+Computer Science student.
 
-Our office hours are Monday to Friday from 9:00 AM to 5:00 PM.
+Skills:
+React
+JavaScript
+Python
+LangChain
+RAG
+Node.js
 
-We specialize in Artificial Intelligence, Web Development, Mobile App Development, and Cloud Solutions.
+Projects:
+WhatsApp AI Bot
+Travel Planner
+Notes App
 
-Our customer support email is support@abctech.com.
+Interests:
+Artificial Intelligence
+Full Stack Development
+Cyber Security
 
-Our contact number is +92-300-1234567.
+Education:
+...
 
-The CEO of ABC Technologies is Ahmed Khan.
+Frequently Asked Questions
 
-We offer internship opportunities for university students in Frontend Development, Backend Development, and AI Engineering.
+Q: Who is Sarim?
+A: Sarim is an 18 years old Computer Science aspirant. He has an intmediate background from DJ.govt science college. 
 
-Our headquarters is located in Gulshan-e-Iqbal, Karachi.
+Q: What projects has Sarim built?
+A: Sarim has built numerous projects.
+In C language he developed Supermarket Management System
+In C++ language he developed 2D Zombie Shooter Game
+In HTML + CSS he developed EdTech Landing pages
+IN Javascript he developed Product Dashboard, Tic Tac Toe, Github Profile Finder
+in React + Tailwind he developed Jobs Dashboard, Target Aduience page, Notes App, Gallery Project
+In AI Development he develoepd RAG, MULTIMODAL RAG, Whatsapp chtbots
 
-Employees work in a hybrid environment. They can work from home on Wednesdays and Fridays.
-
-Internships last for 3 months and include mentorship from senior developers.
-
-Our website is www.abctech.com.
-
-We are closed on Saturdays and Sundays.
+Q: What technologies does Sarim know?
+A: you answer
